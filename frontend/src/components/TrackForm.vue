@@ -1,9 +1,15 @@
 <script setup lang="ts">
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-import Loading from './Loading.vue';
-import axios, { AxiosError } from 'axios';
 import { ref, watch, onMounted } from 'vue';
 import { parseDuration, formatSecondsToMMSS } from '../utils';
+import { useTrackStore } from '../stores/trackStore';
+import Loading from './Loading.vue';
+
+const trackStore = useTrackStore();
+
+const emit = defineEmits<{
+  (e: 'submitted'): void;
+  (e: 'closemodal'): void;
+}>();
 
 interface Track {
   id?: number;
@@ -14,27 +20,21 @@ interface Track {
 }
 
 interface ValidationErrorResponse {
-  errors: {
-    [key: string]: string
-  }
+  errors: { [key: string]: string };
 }
-const emit = defineEmits<{
-  (e: 'submitted'): void
-  (e: 'closemodal'): void
+
+const props = defineProps<{
+  title: string;
+  track?: Track | null;
 }>();
 
 const title = ref<string>('');
 const artist = ref<string>('');
-const duration = ref<number | null>(null)
+const duration = ref<number | null>(null);
 const formattedDuration = ref<string>('');
 const isrc = ref<string>('');
-const isSubmitting = ref<Boolean>(false);
+const isSubmitting = ref<boolean>(false);
 const errorResponse = ref<ValidationErrorResponse | null>(null);
-
-const props = defineProps<{
-  title: string,
-  track?: Track | null
-}>()
 
 const resetForm = () => {
   title.value = '';
@@ -42,15 +42,15 @@ const resetForm = () => {
   duration.value = null;
   formattedDuration.value = '';
   isrc.value = '';
-}
+};
 
 const closeAlert = () => {
   errorResponse.value = null;
-}
+};
 
 const closeModal = () => {
   emit('closemodal');
-}
+};
 
 function setCustomPatternMessage(event: Event, message: string) {
   const input = event.target as HTMLInputElement;
@@ -61,112 +61,108 @@ function setCustomPatternMessage(event: Event, message: string) {
 
 function clearCustomValidity(event: Event) {
   const input = event.target as HTMLInputElement;
-  input.setCustomValidity("");
+  input.setCustomValidity('');
 }
 
 const validateForm = (): boolean => {
-  const e: { [key: string]: string } = {}
+  const e: { [key: string]: string } = {};
 
   if (!title.value?.trim()) {
-    e.title = 'Please enter a value for the title field.'
+    e.title = 'Please enter a value for the title field.';
   }
 
   if (!artist.value?.trim()) {
-    e.artist = 'Please enter a value for the artist field.'
+    e.artist = 'Please enter a value for the artist field.';
   }
 
-  if (formattedDuration.value?.trim() && !/^(\d{1,7}|[0-9]{1,2}:[0-5][0-9])$/.test(formattedDuration.value)) {
-    e.duration = 'Please enter a valid duration greater than 0.'
+  if (
+    formattedDuration.value?.trim() &&
+    !/^(\d{1,7}|[0-9]{1,2}:[0-5][0-9])$/.test(formattedDuration.value)
+  ) {
+    e.duration = 'Please enter a valid duration greater than 0.';
   }
 
   if (isrc.value && !/^[A-Z]{2}-[A-Z0-9]{3}-\d{2}-\d{5}$/.test(isrc.value)) {
-    e.isrc = 'ISRC must follow the format XX-XXX-00-00000.'
+    e.isrc = 'ISRC must follow the format XX-XXX-00-00000.';
   }
 
   if (Object.keys(e).length > 0) {
-    errorResponse.value = {errors: e}
-    return false
+    errorResponse.value = { errors: e };
+    return false;
   }
 
-  errorResponse.value = null
-  return true
-}
+  errorResponse.value = null;
+  return true;
+};
 
 const handleSubmit = async () => {
-  isSubmitting.value = true
+  isSubmitting.value = true;
 
   if (!validateForm()) {
-    isSubmitting.value = false
-    return
+    isSubmitting.value = false;
+    return;
   }
 
-  try {
-    const track: Track = {
-      title: title.value?.trim() || '',
-      artist: artist.value?.trim() || '',
-      duration: parseDuration(formattedDuration.value) ?? 0,
-      isrc: isrc.value?.trim() || '',
-    }
+  const track: Track = {
+    title: title.value?.trim() || '',
+    artist: artist.value?.trim() || '',
+    duration: parseDuration(formattedDuration.value) ?? 0,
+    isrc: isrc.value?.trim() || '',
+  };
 
+  try {
     if (props.track?.id) {
-      await axios.put(`${API_BASE_URL}/tracks/${props.track.id}`, track)
+      await trackStore.updateTrack(props.track.id, track);
     } else {
-      await axios.post(`${API_BASE_URL}/tracks`, track)
+      await trackStore.addTrack(track);
     }
 
     resetForm();
-    emit('submitted')
-  } catch (err) {
-    const error = err as AxiosError
-    if (error.response?.data && typeof error.response.data === 'object') {
-      errorResponse.value = { errors: (error.response.data as any).errors }
+    emit('submitted');
+  } catch (err: any) {
+    if (err.response?.data?.errors) {
+      errorResponse.value = { errors: err.response.data.errors };
+    } else {
+      console.error('Unexpected error:', err);
     }
-
-    console.warn("Error", error)
   } finally {
-    isSubmitting.value = false
+    isSubmitting.value = false;
   }
-}
+};
 
 onMounted(() => {
   if (props.track) {
-    console.log(props.track);
     title.value = props.track.title;
     artist.value = props.track.artist;
     duration.value = props.track.duration;
-    formattedDuration.value = formatSecondsToMMSS(duration.value)
+    formattedDuration.value = formatSecondsToMMSS(duration.value);
     isrc.value = props.track.isrc ?? '';
   } else {
     resetForm();
   }
-})
+});
 
 watch(
   () => props.track,
   (newTrack) => {
-    try {
-      if (newTrack) {
-        title.value = newTrack.title;
-        artist.value = newTrack.artist;
-        duration.value = newTrack.duration;
-        formattedDuration.value = formatSecondsToMMSS(duration.value)
-        isrc.value = newTrack.isrc ?? '';
-      } else {
-        resetForm();
-      }
-    } catch (error) {
-      console.error('Error in track watcher:', error);
+    if (newTrack) {
+      title.value = newTrack.title;
+      artist.value = newTrack.artist;
+      duration.value = newTrack.duration;
+      formattedDuration.value = formatSecondsToMMSS(duration.value);
+      isrc.value = newTrack.isrc ?? '';
+    } else {
+      resetForm();
     }
   },
   { immediate: true }
 );
-
 </script>
 
 <template>
   <div class="relative w-full max-w-2xl max-h-full">
     <form class="relative bg-white rounded-lg shadow-sm" @submit.prevent="handleSubmit">
-      <div class="flex items-start justify-between p-5 border-b rounded-t border-gray-200">
+      <div class="flex items-start justify-between p-5 border-b border-gray-200 rounded-t">
         <h3 class="text-xl font-semibold text-gray-900 lg:text-2xl">{{ props.title }}</h3>
         <button type="button" @click="closeModal" class="cursor-pointer text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center">
           <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -195,7 +191,7 @@ watch(
         <div class="p-6 space-y-6">
           <div>
             <label for="title" class="block mb-2 text-sm font-medium text-gray-900">Title</label>
-            <input type="text" id="title" v-model="title" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Track title..." required />
+            <input type="text" id="title" v-model="title" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Track title..." />
           </div>
           <div>
             <label for="artist" class="block mb-2 text-sm font-medium text-gray-900">Artist</label>
