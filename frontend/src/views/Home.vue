@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { Modal } from 'flowbite';
 import TrackForm from '../components/TrackForm.vue';
 import Row from '../components/Row.vue';
@@ -16,6 +16,7 @@ interface Track {
 }
 
 const route = useRoute();
+const router = useRouter();
 const trackStore = useTrackStore();
 
 const trackToEdit = ref<Track | null>(null);
@@ -27,9 +28,13 @@ const openEditModal = (track: Track) => {
   modalInstance?.show();
 };
 
-const loadTracks = () => {
+const loadTracks = async () => {
   const page = parseInt(route.query.page as string) || 1;
-  trackStore.fetchTracks(page);
+  await trackStore.fetchTracks(page);
+
+  if (trackStore.tracks.length === 0 && page > 1) {
+    router.push({ path: '/track/', query: { page: page - 1 } });
+  }
 };
 
 onMounted(() => {
@@ -53,11 +58,10 @@ watch(
 
 <template>
   <section class="p-3 sm:p-5">
-    <div v-if="trackStore.isLoading">Loading...</div>
-    <div v-else>
-      <div class="max-w-screen-xl px-4 mx-auto lg:px-12">
+    <div class="max-w-screen-xl px-4 mx-auto lg:px-12">
+      <div v-if="trackStore.isLoading">Loading...</div>
+      <div v-else>
         <div class="relative overflow-hidden bg-white shadow-md sm:rounded-lg">
-          <!-- Header + Add Button -->
           <div class="flex items-center justify-between p-4">
             <AddTrack @submitted="loadTracks" />
           </div>

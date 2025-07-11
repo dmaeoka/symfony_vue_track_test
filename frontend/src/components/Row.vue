@@ -18,11 +18,9 @@ interface Track {
 }
 
 const trackStore = useTrackStore();
-
 const dropdownElement = ref<HTMLElement | null>(null);
 const dropdownTriggerElement = ref<HTMLElement | null>(null);
 let dropdownInstance: Dropdown | null = null;
-
 const props = defineProps<{
   track: Track
 }>()

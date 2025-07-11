@@ -50,18 +50,26 @@ export const useTrackStore = defineStore('trackStore', {
       try {
         await axios.delete(`${import.meta.env.VITE_API_BASE_URL}/tracks/${id}`);
         this.tracks = this.tracks.filter(t => t.id !== id);
+        const currentPage = this.pagination?.current_page ?? 1;
+        const remainingItems = this.tracks.length;
+
+        if (remainingItems === 0 && currentPage > 1) {
+          await this.fetchTracks(currentPage - 1);
+        } else {
+          await this.fetchTracks(currentPage);
+        }
+
       } catch (error) {
         console.error('Failed to delete track:', error);
       }
     },
     async addTrack(track: Track) {
-      const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/tracks`, track);
-      this.tracks.push(res.data);
+      await axios.post(`${import.meta.env.VITE_API_BASE_URL}/tracks`, track);
     },
     async updateTrack(id: number, track: Track) {
       const res = await axios.put(`${import.meta.env.VITE_API_BASE_URL}/tracks/${id}`, track);
       const index = this.tracks.findIndex(t => t.id === id);
-      if (index !== -1) this.tracks[index] = res.data;
+      if (index !== -1) this.tracks[index] = JSON.parse(res.data);
     }
   },
 })
